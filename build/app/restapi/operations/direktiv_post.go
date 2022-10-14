@@ -3,12 +3,17 @@ package operations
 import (
 	"context"
 	"fmt"
+	"strings"
 	"sync"
 
 	"github.com/direktiv/apps/go/pkg/apps"
 	"github.com/go-openapi/runtime/middleware"
 	"github.com/go-openapi/strfmt"
 
+	// custom function imports
+	// end
+	// custom function imports
+	// end
 	// custom function imports
 	// end
 
@@ -87,6 +92,66 @@ func PostDirektivHandle(params PostParams) middleware.Responder {
 
 	// if foreach returns an error there is no continue
 	//
+	// default we do not continue
+	cont = convertTemplateToBool("<no value>", accParams, false)
+	// cont = convertTemplateToBool("<no value>", accParams, true)
+	//
+
+	if err != nil && !cont {
+
+		errName := cmdErr
+
+		// if the delete function added the cancel tag
+		ci, ok := sm.Load(*params.DirektivActionID)
+		if ok {
+			cinfo, ok := ci.(*ctxInfo)
+			if ok && cinfo.cancelled {
+				errName = "direktiv.actionCancelled"
+				err = fmt.Errorf("action got cancel request")
+			}
+		}
+
+		return generateError(errName, err)
+	}
+
+	paramsCollector = append(paramsCollector, ret)
+	accParams.Commands = paramsCollector
+	ret, err = runCommand1(ctx, accParams, ri)
+
+	responses = append(responses, ret)
+
+	// if foreach returns an error there is no continue
+	//
+	// default we do not continue
+	cont = convertTemplateToBool("<no value>", accParams, false)
+	// cont = convertTemplateToBool("<no value>", accParams, true)
+	//
+
+	if err != nil && !cont {
+
+		errName := cmdErr
+
+		// if the delete function added the cancel tag
+		ci, ok := sm.Load(*params.DirektivActionID)
+		if ok {
+			cinfo, ok := ci.(*ctxInfo)
+			if ok && cinfo.cancelled {
+				errName = "direktiv.actionCancelled"
+				err = fmt.Errorf("action got cancel request")
+			}
+		}
+
+		return generateError(errName, err)
+	}
+
+	paramsCollector = append(paramsCollector, ret)
+	accParams.Commands = paramsCollector
+	ret, err = runCommand2(ctx, accParams, ri)
+
+	responses = append(responses, ret)
+
+	// if foreach returns an error there is no continue
+	//
 	// cont = false
 	//
 
@@ -111,7 +176,7 @@ func PostDirektivHandle(params PostParams) middleware.Responder {
 	accParams.Commands = paramsCollector
 
 	s, err := templateString(`{
-  "node": {{ index . 0 | toJson }}
+  "node": {{ index . 2 | toJson }}
 }
 `, responses)
 	if err != nil {
@@ -131,14 +196,92 @@ func PostDirektivHandle(params PostParams) middleware.Responder {
 	return NewPostOK().WithPayload(resp)
 }
 
+// exec
+func runCommand0(ctx context.Context,
+	params accParams, ri *apps.RequestInfo) (map[string]interface{}, error) {
+
+	ir := make(map[string]interface{})
+	ir[successKey] = false
+
+	at := accParamsTemplate{
+		*params.Body,
+		params.Commands,
+		params.DirektivDir,
+	}
+
+	cmd, err := templateString(`{{ if .Context }} mkdir -p /context/{{ .Context }} {{ else }} echo -n "" {{ end }}`, at)
+	if err != nil {
+		ri.Logger().Infof("error executing command: %v", err)
+		ir[resultKey] = err.Error()
+		return ir, err
+	}
+	cmd = strings.Replace(cmd, "\n", "", -1)
+
+	silent := convertTemplateToBool("true", at, false)
+	print := convertTemplateToBool("false", at, true)
+	output := ""
+
+	envs := []string{}
+
+	workingDir, err := templateString(``, at)
+	if err != nil {
+		ir[resultKey] = err.Error()
+		return ir, err
+	}
+
+	return runCmd(ctx, cmd, envs, output, silent, print, ri, workingDir)
+
+}
+
+// end commands
+
+// exec
+func runCommand1(ctx context.Context,
+	params accParams, ri *apps.RequestInfo) (map[string]interface{}, error) {
+
+	ir := make(map[string]interface{})
+	ir[successKey] = false
+
+	at := accParamsTemplate{
+		*params.Body,
+		params.Commands,
+		params.DirektivDir,
+	}
+
+	cmd, err := templateString(`{{ if .Context }} cp -Rf . /context/{{ .Context }} {{ else }} echo -n "" {{ end }}`, at)
+	if err != nil {
+		ri.Logger().Infof("error executing command: %v", err)
+		ir[resultKey] = err.Error()
+		return ir, err
+	}
+	cmd = strings.Replace(cmd, "\n", "", -1)
+
+	silent := convertTemplateToBool("true", at, false)
+	print := convertTemplateToBool("false", at, true)
+	output := ""
+
+	envs := []string{}
+
+	workingDir, err := templateString(``, at)
+	if err != nil {
+		ir[resultKey] = err.Error()
+		return ir, err
+	}
+
+	return runCmd(ctx, cmd, envs, output, silent, print, ri, workingDir)
+
+}
+
+// end commands
+
 // foreach command
-type LoopStruct0 struct {
+type LoopStruct2 struct {
 	accParams
 	Item        interface{}
 	DirektivDir string
 }
 
-func runCommand0(ctx context.Context,
+func runCommand2(ctx context.Context,
 	params accParams, ri *apps.RequestInfo) ([]map[string]interface{}, error) {
 
 	var cmds []map[string]interface{}
@@ -149,13 +292,13 @@ func runCommand0(ctx context.Context,
 
 	for a := range params.Body.Commands {
 
-		ls := &LoopStruct0{
+		ls := &LoopStruct2{
 			params,
 			params.Body.Commands[a],
 			params.DirektivDir,
 		}
 
-		cmd, err := templateString(`bash -c 'source /usr/local/nvm/nvm.sh && nvm use {{ if .Item.Node }} {{ .Item.Node }} {{ else }} 18.10.0 {{ end }} && {{ .Item.Command }}'`, ls)
+		cmd, err := templateString(`bash -c 'source /usr/local/nvm/nvm.sh && nvm use {{ if .Body.Node }} {{ .Body.Node }} {{ else }} 18.10.0 {{ end }} > /dev/null && {{ .Item.Command }}'`, ls)
 		if err != nil {
 			ir := make(map[string]interface{})
 			ir[successKey] = false
@@ -167,11 +310,20 @@ func runCommand0(ctx context.Context,
 		silent := convertTemplateToBool("{{ .Item.Silent }}", ls, false)
 		print := convertTemplateToBool("{{ .Item.Print }}", ls, true)
 		cont := convertTemplateToBool("{{ .Item.Continue }}", ls, false)
-		output := "jens.json"
+		output := "output.json"
 
 		envs := []string{}
 
-		r, err := runCmd(ctx, cmd, envs, output, silent, print, ri)
+		workingDir, err := templateString(`{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}`, ls)
+		if err != nil {
+			ir := make(map[string]interface{})
+			ir[successKey] = false
+			ir[resultKey] = err.Error()
+			cmds = append(cmds, ir)
+			continue
+		}
+
+		r, err := runCmd(ctx, cmd, envs, output, silent, print, ri, workingDir)
 		if err != nil {
 			ir := make(map[string]interface{})
 			ir[successKey] = false

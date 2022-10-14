@@ -10,7 +10,10 @@ states:
     function: node
     input:
       commands:
-      - command: Example of running node
+      - command: node hello.js
+      files:
+      - data: "console.log(\"Hello World\"); \n"
+        name: hello.js
   transition: state1
 - id: state1
   type: action
@@ -18,8 +21,31 @@ states:
     function: node
     input:
       commands:
-      - command: Example of running node
+      - command: node -v
+      node: "16"
+  transition: state2
+- id: state2
+  type: action
+  action:
+    function: node
+    input:
+      commands:
+      - command: npm install uuid
+      - command: node myapp.js
+      context: uuid-app
       files:
-      - data: Hello World
-        mode: "0755"
-        name: hello.txt
+      - data: |
+          const { v4: uuidv4 } = require('uuid');
+          console.log(uuidv4());
+        name: myapp.js
+  transition: state3
+- id: state3
+  type: action
+  action:
+    function: node
+    input:
+      commands:
+      - command: node out.js
+    files:
+    - key: out.js
+      scope: workflow

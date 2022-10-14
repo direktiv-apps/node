@@ -39,7 +39,7 @@ func init() {
       "container": "gcr.io/direktiv/functions/node",
       "issues": "https://github.com/direktiv-apps/node/issues",
       "license": "[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)",
-      "long-description": "Run node in Direktiv as a function\nshared across instances needs nvm in front of it",
+      "long-description": "This function provides a Node.js a s a Direktiv function. Node Version Manager is installed to support LTS versions. The following versions are installed in this function:\n\n- 18.10.0\n\n- 16.17.1\n\nNVM (Node Version Manager) can be used as well to install different versions but it is function wide which means changes are visible to all function calls during the function / container lifetime. If the application is returning plain JSON on standard out it will be used as JSON result in Direktiv. If the application prints other strings to standard out the response will be a plain string. If JSON output is required the application can create and write to a file called output.json. If this file exists, this function uses its contents as return value.\nFunctions can have a context to persist the node_modules directory across different execution cycles. Unlike Direktiv's regular behaviour to have a new working directory for each execution, the context ensures that it runs in the same directory each time. ",
       "maintainer": "[direktiv.io](https://www.direktiv.io) ",
       "url": "https://github.com/direktiv-apps/node"
     }
@@ -73,7 +73,7 @@ func init() {
                   "type": "array",
                   "default": [
                     {
-                      "command": "echo Hello"
+                      "command": "node app.js"
                     }
                   ],
                   "items": {
@@ -86,11 +86,6 @@ func init() {
                       "continue": {
                         "description": "Stops excecution if command fails, otherwise proceeds with next command",
                         "type": "boolean"
-                      },
-                      "node": {
-                        "description": "Default node version for the script",
-                        "type": "string",
-                        "default": "18.10.0"
                       },
                       "print": {
                         "description": "If set to false the command will not print the full command with arguments to logs.",
@@ -105,6 +100,10 @@ func init() {
                     }
                   }
                 },
+                "context": {
+                  "description": "Direktiv will delete the working directory after each execution. With the context the application can run in a different\ndirectory and commands like npm install will be persistent. If context is not set the \"node_module\" directory will be deleted\nand each execution of the flow uses an empty modules folder. Multiple apps can not share a context. \n",
+                  "type": "string"
+                },
                 "files": {
                   "description": "File to create before running commands.",
                   "type": "array",
@@ -112,6 +111,11 @@ func init() {
                   "items": {
                     "$ref": "#/definitions/direktivFile"
                   }
+                },
+                "node": {
+                  "description": "Default node version for the script",
+                  "type": "string",
+                  "default": "18.10.0"
                 }
               }
             }
@@ -146,11 +150,7 @@ func init() {
             "examples": {
               "node": [
                 {
-                  "result": null,
-                  "success": true
-                },
-                {
-                  "result": null,
+                  "result": "Hello World",
                   "success": true
                 }
               ]
@@ -174,16 +174,29 @@ func init() {
         "x-direktiv": {
           "cmds": [
             {
+              "action": "exec",
+              "exec": "{{ if .Context }} mkdir -p /context/{{ .Context }} {{ else }} echo -n \"\" {{ end }}",
+              "print": false,
+              "silent": true
+            },
+            {
+              "action": "exec",
+              "exec": "{{ if .Context }} cp -Rf . /context/{{ .Context }} {{ else }} echo -n \"\" {{ end }}",
+              "print": false,
+              "silent": true
+            },
+            {
               "action": "foreach",
               "continue": "{{ .Item.Continue }}",
-              "exec": "bash -c 'source /usr/local/nvm/nvm.sh \u0026\u0026 nvm use {{ if .Item.Node }} {{ .Item.Node }} {{ else }} 18.10.0 {{ end }} \u0026\u0026 {{ .Item.Command }}'",
+              "exec": "bash -c 'source /usr/local/nvm/nvm.sh \u0026\u0026 nvm use {{ if .Body.Node }} {{ .Body.Node }} {{ else }} 18.10.0 {{ end }} \u003e /dev/null \u0026\u0026 {{ .Item.Command }}'",
               "loop": ".Commands",
-              "output": "jens.json",
+              "output": "output.json",
               "print": "{{ .Item.Print }}",
-              "silent": "{{ .Item.Silent }}"
+              "silent": "{{ .Item.Silent }}",
+              "workingdir": "{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}"
             }
           ],
-          "output": "{\n  \"node\": {{ index . 0 | toJson }}\n}\n"
+          "output": "{\n  \"node\": {{ index . 2 | toJson }}\n}\n"
         },
         "x-direktiv-errors": {
           "io.direktiv.command.error": "Command execution failed",
@@ -192,12 +205,20 @@ func init() {
         },
         "x-direktiv-examples": [
           {
-            "content": "- id: node\n  type: action\n  action:\n    function: node\n    input: \n      commands:\n      - command: Example of running node",
+            "content": "- id: node \n  type: action\n  action:\n    function: node\n    input:\n      files:\n      - name: hello.js\n        data: |\n          console.log(\"Hello World\"); \n      commands:\n      - command: node hello.js",
             "title": "Basic"
           },
           {
-            "content": "- id: node\n  type: action\n  action:\n    function: node\n    input: \n      files:\n      - name: hello.txt\n        data: Hello World\n        mode: '0755'\n      commands:\n      - command: Example of running node",
-            "title": "Advanced"
+            "content": "- id: node \n  type: action\n  action:\n    function: node\n    input:\n      node: \"16\"\n      commands:\n      - command: node -v",
+            "title": "Change node version"
+          },
+          {
+            "content": "- id: node \n  type: action\n  action:\n    function: node\n    input: \n      context: uuid-app\n      files: \n      - name: myapp.js\n        data: |\n          const { v4: uuidv4 } = require('uuid');\n          console.log(uuidv4());\n      commands:\n      - command: npm install uuid\n      - command: node myapp.js   ",
+            "title": "Using a context"
+          },
+          {
+            "content": "- id: node \n  type: action\n  action:\n    function: node\n    files:\n    - key: out.js\n      scope: workflow\n    input:\n      commands:\n      - command: node out.js      ",
+            "title": "Using Direktiv variable as script"
           }
         ],
         "x-direktiv-function": "functions:\n- id: node\n  image: gcr.io/direktiv/functions/node:1.0\n  type: knative-workflow"
@@ -271,7 +292,7 @@ func init() {
       "container": "gcr.io/direktiv/functions/node",
       "issues": "https://github.com/direktiv-apps/node/issues",
       "license": "[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)",
-      "long-description": "Run node in Direktiv as a function\nshared across instances needs nvm in front of it",
+      "long-description": "This function provides a Node.js a s a Direktiv function. Node Version Manager is installed to support LTS versions. The following versions are installed in this function:\n\n- 18.10.0\n\n- 16.17.1\n\nNVM (Node Version Manager) can be used as well to install different versions but it is function wide which means changes are visible to all function calls during the function / container lifetime. If the application is returning plain JSON on standard out it will be used as JSON result in Direktiv. If the application prints other strings to standard out the response will be a plain string. If JSON output is required the application can create and write to a file called output.json. If this file exists, this function uses its contents as return value.\nFunctions can have a context to persist the node_modules directory across different execution cycles. Unlike Direktiv's regular behaviour to have a new working directory for each execution, the context ensures that it runs in the same directory each time. ",
       "maintainer": "[direktiv.io](https://www.direktiv.io) ",
       "url": "https://github.com/direktiv-apps/node"
     }
@@ -311,11 +332,7 @@ func init() {
             "examples": {
               "node": [
                 {
-                  "result": null,
-                  "success": true
-                },
-                {
-                  "result": null,
+                  "result": "Hello World",
                   "success": true
                 }
               ]
@@ -339,16 +356,29 @@ func init() {
         "x-direktiv": {
           "cmds": [
             {
+              "action": "exec",
+              "exec": "{{ if .Context }} mkdir -p /context/{{ .Context }} {{ else }} echo -n \"\" {{ end }}",
+              "print": false,
+              "silent": true
+            },
+            {
+              "action": "exec",
+              "exec": "{{ if .Context }} cp -Rf . /context/{{ .Context }} {{ else }} echo -n \"\" {{ end }}",
+              "print": false,
+              "silent": true
+            },
+            {
               "action": "foreach",
               "continue": "{{ .Item.Continue }}",
-              "exec": "bash -c 'source /usr/local/nvm/nvm.sh \u0026\u0026 nvm use {{ if .Item.Node }} {{ .Item.Node }} {{ else }} 18.10.0 {{ end }} \u0026\u0026 {{ .Item.Command }}'",
+              "exec": "bash -c 'source /usr/local/nvm/nvm.sh \u0026\u0026 nvm use {{ if .Body.Node }} {{ .Body.Node }} {{ else }} 18.10.0 {{ end }} \u003e /dev/null \u0026\u0026 {{ .Item.Command }}'",
               "loop": ".Commands",
-              "output": "jens.json",
+              "output": "output.json",
               "print": "{{ .Item.Print }}",
-              "silent": "{{ .Item.Silent }}"
+              "silent": "{{ .Item.Silent }}",
+              "workingdir": "{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}"
             }
           ],
-          "output": "{\n  \"node\": {{ index . 0 | toJson }}\n}\n"
+          "output": "{\n  \"node\": {{ index . 2 | toJson }}\n}\n"
         },
         "x-direktiv-errors": {
           "io.direktiv.command.error": "Command execution failed",
@@ -357,12 +387,20 @@ func init() {
         },
         "x-direktiv-examples": [
           {
-            "content": "- id: node\n  type: action\n  action:\n    function: node\n    input: \n      commands:\n      - command: Example of running node",
+            "content": "- id: node \n  type: action\n  action:\n    function: node\n    input:\n      files:\n      - name: hello.js\n        data: |\n          console.log(\"Hello World\"); \n      commands:\n      - command: node hello.js",
             "title": "Basic"
           },
           {
-            "content": "- id: node\n  type: action\n  action:\n    function: node\n    input: \n      files:\n      - name: hello.txt\n        data: Hello World\n        mode: '0755'\n      commands:\n      - command: Example of running node",
-            "title": "Advanced"
+            "content": "- id: node \n  type: action\n  action:\n    function: node\n    input:\n      node: \"16\"\n      commands:\n      - command: node -v",
+            "title": "Change node version"
+          },
+          {
+            "content": "- id: node \n  type: action\n  action:\n    function: node\n    input: \n      context: uuid-app\n      files: \n      - name: myapp.js\n        data: |\n          const { v4: uuidv4 } = require('uuid');\n          console.log(uuidv4());\n      commands:\n      - command: npm install uuid\n      - command: node myapp.js   ",
+            "title": "Using a context"
+          },
+          {
+            "content": "- id: node \n  type: action\n  action:\n    function: node\n    files:\n    - key: out.js\n      scope: workflow\n    input:\n      commands:\n      - command: node out.js      ",
+            "title": "Using Direktiv variable as script"
           }
         ],
         "x-direktiv-function": "functions:\n- id: node\n  image: gcr.io/direktiv/functions/node:1.0\n  type: knative-workflow"
@@ -448,12 +486,16 @@ func init() {
           "type": "array",
           "default": [
             {
-              "command": "echo Hello"
+              "command": "node app.js"
             }
           ],
           "items": {
             "$ref": "#/definitions/postParamsBodyCommandsItems"
           }
+        },
+        "context": {
+          "description": "Direktiv will delete the working directory after each execution. With the context the application can run in a different\ndirectory and commands like npm install will be persistent. If context is not set the \"node_module\" directory will be deleted\nand each execution of the flow uses an empty modules folder. Multiple apps can not share a context. \n",
+          "type": "string"
         },
         "files": {
           "description": "File to create before running commands.",
@@ -462,6 +504,11 @@ func init() {
           "items": {
             "$ref": "#/definitions/direktivFile"
           }
+        },
+        "node": {
+          "description": "Default node version for the script",
+          "type": "string",
+          "default": "18.10.0"
         }
       },
       "x-go-gen-location": "operations"
@@ -476,11 +523,6 @@ func init() {
         "continue": {
           "description": "Stops excecution if command fails, otherwise proceeds with next command",
           "type": "boolean"
-        },
-        "node": {
-          "description": "Default node version for the script",
-          "type": "string",
-          "default": "18.10.0"
         },
         "print": {
           "description": "If set to false the command will not print the full command with arguments to logs.",

@@ -23,8 +23,17 @@ type PostParamsBody struct {
 	// Array of commands.
 	Commands []*PostParamsBodyCommandsItems `json:"commands"`
 
+	// Direktiv will delete the working directory after each execution. With the context the application can run in a different
+	// directory and commands like npm install will be persistent. If context is not set the "node_module" directory will be deleted
+	// and each execution of the flow uses an empty modules folder. Multiple apps can not share a context.
+	//
+	Context string `json:"context,omitempty"`
+
 	// File to create before running commands.
 	Files []apps.DirektivFile `json:"files"`
+
+	// Default node version for the script
+	Node *string `json:"node,omitempty"`
 }
 
 // Validate validates this post params body

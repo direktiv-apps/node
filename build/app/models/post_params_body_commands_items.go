@@ -23,9 +23,6 @@ type PostParamsBodyCommandsItems struct {
 	// Stops excecution if command fails, otherwise proceeds with next command
 	Continue bool `json:"continue,omitempty"`
 
-	// Default node version for the script
-	Node *string `json:"node,omitempty"`
-
 	// If set to false the command will not print the full command with arguments to logs.
 	Print *bool `json:"print,omitempty"`
 

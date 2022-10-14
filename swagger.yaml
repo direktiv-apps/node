@@ -14,10 +14,21 @@ info:
     license: |-
       [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)
     long-description: >-
-      Run node in Direktiv as a function
+      This function provides a Node.js a s a Direktiv function. Node Version Manager is installed to support LTS versions. The following versions are installed in this function:
 
-      shared across instances
-      needs nvm in front of it
+
+      - 18.10.0
+
+
+      - 16.17.1
+
+
+      NVM (Node Version Manager) can be used as well to install different versions but it is function wide which means changes are visible to all function calls during the function / container lifetime.
+      If the application is returning plain JSON on standard out it will be used as JSON result in Direktiv. If the application prints other strings to standard out the response will be a plain string. If JSON output is required the application can create and write to a file called output.json. If this file exists, this function uses its contents as return value.
+
+      Functions can have a context to persist the node_modules directory across different execution cycles. Unlike Direktiv's regular behaviour to have a new working directory for each execution, the context
+      ensures that it runs in the same directory each time. 
+
 consumes:
 - application/json
 produces:
@@ -59,6 +70,16 @@ paths:
           schema:
             type: object
             properties:
+              context:
+                type: string
+                description: |
+                  Direktiv will delete the working directory after each execution. With the context the application can run in a different
+                  directory and commands like npm install will be persistent. If context is not set the "node_module" directory will be deleted
+                  and each execution of the flow uses an empty modules folder. Multiple apps can not share a context. 
+              node:
+                type: string
+                default: 18.10.0
+                description: Default node version for the script
               files:
                 type: array
                 items:
@@ -85,12 +106,8 @@ paths:
                     continue: 
                       type: boolean
                       description: Stops excecution if command fails, otherwise proceeds with next command 
-                    node:
-                      type: string
-                      default: 18.10.0
-                      description: Default node version for the script
                 default: 
-                - command: echo Hello
+                - command: node app.js
       # direktiv code generation is configured here
       x-direktiv-function: |-
         functions:
@@ -101,38 +118,78 @@ paths:
         # ADD MORE EXAMPLES HERE
         - title: Basic
           content: |-
-            - id: node
+            - id: node 
               type: action
               action:
                 function: node
-                input: 
-                  commands:
-                  - command: Example of running node
-        - title: Advanced
-          content: |-
-            - id: node
-              type: action
-              action:
-                function: node
-                input: 
+                input:
                   files:
-                  - name: hello.txt
-                    data: Hello World
-                    mode: '0755'
+                  - name: hello.js
+                    data: |
+                      console.log("Hello World"); 
                   commands:
-                  - command: Example of running node
+                  - command: node hello.js
+        - title: Change node version
+          content: |-
+            - id: node 
+              type: action
+              action:
+                function: node
+                input:
+                  node: "16"
+                  commands:
+                  - command: node -v
+        - title: Using a context
+          content: |-
+            - id: node 
+              type: action
+              action:
+                function: node
+                input: 
+                  context: uuid-app
+                  files: 
+                  - name: myapp.js
+                    data: |
+                      const { v4: uuidv4 } = require('uuid');
+                      console.log(uuidv4());
+                  commands:
+                  - command: npm install uuid
+                  - command: node myapp.js   
+        - title: Using Direktiv variable as script
+          content: |-
+            - id: node 
+              type: action
+              action:
+                function: node
+                files:
+                - key: out.js
+                  scope: workflow
+                input:
+                  commands:
+                  - command: node out.js      
       x-direktiv:  
-        cmds:
+        cmds: 
+        # create context dir if set
+        - action: exec
+          exec: '{{ if .Context }} mkdir -p /context/{{ .Context }} {{ else }} echo -n "" {{ end }}'
+          silent: true
+          print: false
+        # copy all files up to 
+        - action: exec
+          exec: '{{ if .Context }} cp -Rf . /context/{{ .Context }} {{ else }} echo -n "" {{ end }}'
+          silent: true
+          print: false
         - action: foreach
           loop: .Commands
-          exec: bash -c 'source /usr/local/nvm/nvm.sh && nvm use {{ if .Item.Node }} {{ .Item.Node }} {{ else }} 18.10.0 {{ end }} && {{ .Item.Command }}'
+          exec: bash -c 'source /usr/local/nvm/nvm.sh && nvm use {{ if .Body.Node }} {{ .Body.Node }} {{ else }} 18.10.0 {{ end }} > /dev/null && {{ .Item.Command }}'
           silent: '{{ .Item.Silent }}'
           print: '{{ .Item.Print }}'
           continue: '{{ .Item.Continue }}'
-          output: jens.json
+          output: output.json
+          workingdir: '{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}'
         output: |
           {
-            "node": {{ index . 0 | toJson }}
+            "node": {{ index . 2 | toJson }}
           }
       x-direktiv-errors:
         io.direktiv.command.error: Command execution failed
@@ -143,9 +200,7 @@ paths:
           description: List of executed commands.
           examples:
             node:
-            - result: # EXAMPLE RESULT HERE
-              success: true
-            - result: #  EXAMPLE RESULT HERE
+            - result: Hello World
               success: true
           schema:
             type: object

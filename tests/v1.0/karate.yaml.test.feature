@@ -15,27 +15,35 @@ Scenario: get request
 	And request
 	"""
 	{
+		"files": [
+			{
+				"name": "out.js",
+				"data": "const { v4: uuidv4 } = require('uuid');\n console.log(uuidv4());"
+			}
+		],
+		"context": "helloworld",
+		"node": "16",
 		"commands": [
 		{
-			"command": "node -v",
-			"silent": true,
-			"print": false,
-			"node": "16"
+			"command": "npm install uuid",
+		},
+		{
+			"command": "node out.js"
 		}
 		]
 	}
 	"""
 	When method POST
 	Then status 200
-	And match $ ==
-	"""
-	{
-	"node": [
-	{
-		"result": "#notnull",
-		"success": true
-	}
-	]
-	}
-	"""
+	# And match $ ==
+	# """
+	# {
+	# "node": [
+	# {
+	# 	"result": "#notnull",
+	# 	"success": true
+	# }
+	# ]
+	# }
+	# """
 	
