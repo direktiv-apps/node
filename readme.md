@@ -4,7 +4,7 @@
 Run node in Direktiv
 
 ---
-- #### Categories: unknown
+- #### Categories: build, development
 - #### Image: gcr.io/direktiv/functions/node 
 - #### License: [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)
 - #### Issue Tracking: https://github.com/direktiv-apps/node/issues
@@ -22,7 +22,6 @@ This function provides a Node.js a s a Direktiv function. Node Version Manager i
 
 NVM (Node Version Manager) can be used as well to install different versions but it is function wide which means changes are visible to all function calls during the function / container lifetime. If the application is returning plain JSON on standard out it will be used as JSON result in Direktiv. If the application prints other strings to standard out the response will be a plain string. If JSON output is required the application can create and write to a file called output.json. If this file exists, this function uses its contents as return value.
 Functions can have a context to persist the node_modules directory across different execution cycles. Unlike Direktiv's regular behaviour to have a new working directory for each execution, the context ensures that it runs in the same directory each time. 
- 
 
 ### Example(s)
   #### Function Configuration
@@ -73,6 +72,19 @@ functions:
       commands:
       - command: npm install uuid
       - command: node myapp.js   
+```
+   #### Using Direktiv variable as script
+```yaml
+- id: node 
+  type: action
+  action:
+    function: node
+    files:
+    - key: out.js
+      scope: workflow
+    input:
+      commands:
+      - command: node out.js      
 ```
 
    ### Secrets

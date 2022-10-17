@@ -34,7 +34,8 @@ func init() {
     "version": "1.0",
     "x-direktiv-meta": {
       "categories": [
-        "unknown"
+        "build",
+        "development"
       ],
       "container": "gcr.io/direktiv/functions/node",
       "issues": "https://github.com/direktiv-apps/node/issues",
@@ -287,7 +288,8 @@ func init() {
     "version": "1.0",
     "x-direktiv-meta": {
       "categories": [
-        "unknown"
+        "build",
+        "development"
       ],
       "container": "gcr.io/direktiv/functions/node",
       "issues": "https://github.com/direktiv-apps/node/issues",

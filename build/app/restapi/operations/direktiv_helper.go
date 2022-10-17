@@ -15,6 +15,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -178,13 +179,17 @@ func runCmd(ctx context.Context, cmdString string, envs []string,
 	// output check
 	b := o.Bytes()
 	if output != "" {
-		b, err = os.ReadFile(output)
+
+		fn := filepath.Join(ri.Dir(), output)
+		b, err = os.ReadFile(fn)
 		if err != nil {
-			ri.Logger().Infof("output file %s not used", output)
+			ri.Logger().Infof("output file %s not used (%v)", output, err)
 			// ir[resultKey] = err.Error()
 			// return ir, err
 			b = o.Bytes()
 		}
+
+		defer os.Remove(fn)
 	}
 
 	var rj interface{}
@@ -193,6 +198,8 @@ func runCmd(ctx context.Context, cmdString string, envs []string,
 		rj = apps.ToJSON(string(b))
 	}
 	ir[resultKey] = rj
+
+	// delete output file
 
 	return ir, nil
 
