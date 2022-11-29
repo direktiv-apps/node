@@ -107,6 +107,21 @@ paths:
                     continue: 
                       type: boolean
                       description: Stops excecution if command fails, otherwise proceeds with next command 
+                    envs:
+                      type: array
+                      description: Environment variables set for each command.
+                      example: 
+                      - name: MYVALUE
+                        value: hello
+                      items:
+                        type: object
+                        properties:
+                          name:
+                            description: Name of the variable.
+                            type: string
+                          value:
+                            description: Value of the variable.
+                            type: string
                 default: 
                 - command: node app.js
       # direktiv code generation is configured here
@@ -188,6 +203,13 @@ paths:
           continue: '{{ .Item.Continue }}'
           output: output.json
           workingdir: '{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}'
+          runtime-envs: |
+            [
+            {{- range $index, $element := .Item.Envs }}
+            {{- if $index}},{{- end}}
+            "{{ $element.Name }}={{ $element.Value }}"
+            {{- end }}
+            ]
         output: |
           {
             "node": {{ index . 2 | toJson }}

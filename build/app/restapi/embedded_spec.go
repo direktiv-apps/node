@@ -88,6 +88,29 @@ func init() {
                         "description": "Stops excecution if command fails, otherwise proceeds with next command",
                         "type": "boolean"
                       },
+                      "envs": {
+                        "description": "Environment variables set for each command.",
+                        "type": "array",
+                        "items": {
+                          "type": "object",
+                          "properties": {
+                            "name": {
+                              "description": "Name of the variable.",
+                              "type": "string"
+                            },
+                            "value": {
+                              "description": "Value of the variable.",
+                              "type": "string"
+                            }
+                          }
+                        },
+                        "example": [
+                          {
+                            "name": "MYVALUE",
+                            "value": "hello"
+                          }
+                        ]
+                      },
                       "print": {
                         "description": "If set to false the command will not print the full command with arguments to logs.",
                         "type": "boolean",
@@ -193,6 +216,7 @@ func init() {
               "loop": ".Commands",
               "output": "output.json",
               "print": "{{ .Item.Print }}",
+              "runtime-envs": "[\n{{- range $index, $element := .Item.Envs }}\n{{- if $index}},{{- end}}\n\"{{ $element.Name }}={{ $element.Value }}\"\n{{- end }}\n]\n",
               "silent": "{{ .Item.Silent }}",
               "workingdir": "{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}"
             }
@@ -376,6 +400,7 @@ func init() {
               "loop": ".Commands",
               "output": "output.json",
               "print": "{{ .Item.Print }}",
+              "runtime-envs": "[\n{{- range $index, $element := .Item.Envs }}\n{{- if $index}},{{- end}}\n\"{{ $element.Name }}={{ $element.Value }}\"\n{{- end }}\n]\n",
               "silent": "{{ .Item.Silent }}",
               "workingdir": "{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}"
             }
@@ -526,6 +551,19 @@ func init() {
           "description": "Stops excecution if command fails, otherwise proceeds with next command",
           "type": "boolean"
         },
+        "envs": {
+          "description": "Environment variables set for each command.",
+          "type": "array",
+          "items": {
+            "$ref": "#/definitions/postParamsBodyCommandsItemsEnvsItems"
+          },
+          "example": [
+            {
+              "name": "MYVALUE",
+              "value": "hello"
+            }
+          ]
+        },
         "print": {
           "description": "If set to false the command will not print the full command with arguments to logs.",
           "type": "boolean",
@@ -535,6 +573,20 @@ func init() {
           "description": "If set to false the command will not print output to logs.",
           "type": "boolean",
           "default": false
+        }
+      },
+      "x-go-gen-location": "operations"
+    },
+    "postParamsBodyCommandsItemsEnvsItems": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "description": "Name of the variable.",
+          "type": "string"
+        },
+        "value": {
+          "description": "Value of the variable.",
+          "type": "string"
         }
       },
       "x-go-gen-location": "operations"

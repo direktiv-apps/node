@@ -2,6 +2,7 @@ package operations
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"strings"
 	"sync"
@@ -178,7 +179,7 @@ func PostDirektivHandle(params PostParams) middleware.Responder {
 	s, err := templateString(`{
   "node": {{ index . 2 | toJson }}
 }
-`, responses)
+`, responses, ri.Dir())
 	if err != nil {
 		return generateError(outErr, err)
 	}
@@ -209,7 +210,7 @@ func runCommand0(ctx context.Context,
 		params.DirektivDir,
 	}
 
-	cmd, err := templateString(`{{ if .Context }} mkdir -p /context/{{ .Context }} {{ else }} echo -n "" {{ end }}`, at)
+	cmd, err := templateString(`{{ if .Context }} mkdir -p /context/{{ .Context }} {{ else }} echo -n "" {{ end }}`, at, params.DirektivDir)
 	if err != nil {
 		ri.Logger().Infof("error executing command: %v", err)
 		ir[resultKey] = err.Error()
@@ -223,7 +224,7 @@ func runCommand0(ctx context.Context,
 
 	envs := []string{}
 
-	workingDir, err := templateString(``, at)
+	workingDir, err := templateString(``, at, params.DirektivDir)
 	if err != nil {
 		ir[resultKey] = err.Error()
 		return ir, err
@@ -248,7 +249,7 @@ func runCommand1(ctx context.Context,
 		params.DirektivDir,
 	}
 
-	cmd, err := templateString(`{{ if .Context }} cp -Rf . /context/{{ .Context }} {{ else }} echo -n "" {{ end }}`, at)
+	cmd, err := templateString(`{{ if .Context }} cp -Rf . /context/{{ .Context }} {{ else }} echo -n "" {{ end }}`, at, params.DirektivDir)
 	if err != nil {
 		ri.Logger().Infof("error executing command: %v", err)
 		ir[resultKey] = err.Error()
@@ -262,7 +263,7 @@ func runCommand1(ctx context.Context,
 
 	envs := []string{}
 
-	workingDir, err := templateString(``, at)
+	workingDir, err := templateString(``, at, params.DirektivDir)
 	if err != nil {
 		ir[resultKey] = err.Error()
 		return ir, err
@@ -298,7 +299,7 @@ func runCommand2(ctx context.Context,
 			params.DirektivDir,
 		}
 
-		cmd, err := templateString(`bash -c 'source /usr/local/nvm/nvm.sh && nvm use {{ if .Body.Node }} {{ .Body.Node }} {{ else }} 18.10.0 {{ end }} > /dev/null && {{ .Item.Command }}'`, ls)
+		cmd, err := templateString(`bash -c 'source /usr/local/nvm/nvm.sh && nvm use {{ if .Body.Node }} {{ .Body.Node }} {{ else }} 18.10.0 {{ end }} > /dev/null && {{ .Item.Command }}'`, ls, params.DirektivDir)
 		if err != nil {
 			ir := make(map[string]interface{})
 			ir[successKey] = false
@@ -314,7 +315,33 @@ func runCommand2(ctx context.Context,
 
 		envs := []string{}
 
-		workingDir, err := templateString(`{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}`, ls)
+		envTempl, err := templateString(`[
+{{- range $index, $element := .Item.Envs }}
+{{- if $index}},{{- end}}
+"{{ $element.Name }}={{ $element.Value }}"
+{{- end }}
+]
+`, ls, params.DirektivDir)
+		if err != nil {
+			ir := make(map[string]interface{})
+			ir[successKey] = false
+			ir[resultKey] = err.Error()
+			cmds = append(cmds, ir)
+			continue
+		}
+		var addEnvs []string
+		err = json.Unmarshal([]byte(envTempl), &addEnvs)
+		if err != nil {
+			ir := make(map[string]interface{})
+			ir[successKey] = false
+			ir[resultKey] = err.Error()
+			cmds = append(cmds, ir)
+			continue
+		}
+		envs = append(envs, addEnvs...)
+
+		workingDir, err := templateString(`{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{ end }}`,
+			ls, params.DirektivDir)
 		if err != nil {
 			ir := make(map[string]interface{})
 			ir[successKey] = false

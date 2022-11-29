@@ -189,7 +189,22 @@ and each execution of the flow uses an empty modules folder. Multiple apps can n
 |------|------|---------|:--------:| ------- |-------------|---------|
 | command | string| `string` |  | | Command to run |  |
 | continue | boolean| `bool` |  | | Stops excecution if command fails, otherwise proceeds with next command |  |
+| envs | [][PostParamsBodyCommandsItemsEnvsItems](#post-params-body-commands-items-envs-items)| `[]*PostParamsBodyCommandsItemsEnvsItems` |  | | Environment variables set for each command. | `[{"name":"MYVALUE","value":"hello"}]` |
 | print | boolean| `bool` |  | `true`| If set to false the command will not print the full command with arguments to logs. |  |
 | silent | boolean| `bool` |  | | If set to false the command will not print output to logs. |  |
+
+
+#### <span id="post-params-body-commands-items-envs-items"></span> postParamsBodyCommandsItemsEnvsItems
+
+  
+
+
+
+**Properties**
+
+| Name | Type | Go type | Required | Default | Description | Example |
+|------|------|---------|:--------:| ------- |-------------|---------|
+| name | string| `string` |  | | Name of the variable. |  |
+| value | string| `string` |  | | Value of the variable. |  |
 
  

@@ -43,7 +43,7 @@ func DeleteDirektivHandle(params DeleteParams) middleware.Responder {
 	ri.Logger().Infof("cancelling action id %v", actionId)
 	cinfo.cf()
 
-	cmd, err := templateString("echo 'cancel {{ .DirektivActionID }}'", params)
+	cmd, err := templateString("echo 'cancel {{ .DirektivActionID }}'", params, ri.Dir())
 	if err != nil {
 		ri.Logger().Infof("can not template cancel command: %v", err)
 		return NewDeleteOK()

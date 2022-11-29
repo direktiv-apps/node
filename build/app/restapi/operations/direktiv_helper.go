@@ -3,8 +3,10 @@ package operations
 import (
 	"bytes"
 	"context"
+	"crypto/md5"
 	"crypto/tls"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"html"
@@ -55,12 +57,40 @@ func deref(dd interface{}) interface{} {
 	}
 }
 
-func templateString(tmplIn string, data interface{}) (string, error) {
+func (a *addOnFunctions) asFile(f interface{}) interface{} {
+
+	b, err := json.MarshalIndent(f, "", "\t")
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+
+	hash := md5.Sum(b)
+	name := fmt.Sprintf("%s.json", hex.EncodeToString(hash[:]))
+
+	err = os.WriteFile(filepath.Join(a.dir, name), b, 0644)
+	if err != nil {
+		return fmt.Sprintf("error: %v", err)
+	}
+
+	return name
+
+}
+
+type addOnFunctions struct {
+	dir string
+}
+
+func templateString(tmplIn string, data interface{}, dir string) (string, error) {
+
+	aof := &addOnFunctions{
+		dir: dir,
+	}
 
 	tmpl, err := template.New("base").Funcs(sprig.FuncMap()).Funcs(template.FuncMap{
 		"fileExists": fileExists,
 		"deref":      deref,
 		"file64":     file64,
+		"asFile":     aof.asFile,
 	}).Parse(tmplIn)
 
 	if err != nil {
@@ -84,7 +114,7 @@ func templateString(tmplIn string, data interface{}) (string, error) {
 
 func convertTemplateToBool(template string, data interface{}, defaultValue bool) bool {
 
-	out, err := templateString(template, data)
+	out, err := templateString(template, data, "")
 	if err != nil {
 		return defaultValue
 	}
