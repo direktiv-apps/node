@@ -1,0 +1,230 @@
+openapi: 3.0.1
+info:
+  title: node
+  description: Run node in Direktiv
+  version: "1.0"
+  x-direktiv-meta:
+    container: gcr.io/direktiv/functions/node
+    maintainer: "[direktiv.io](https://www.direktiv.io) "
+    issues: https://github.com/direktiv-apps/node/issues
+    url: https://github.com/direktiv-apps/node
+    categories:
+    - build
+    - development
+    license: "[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)"
+    long-description: "This function provides a Node.js a s a Direktiv function. Node\
+      \ Version Manager is installed to support LTS versions. The following versions\
+      \ are installed in this function:\n\n- 18.10.0\n\n- 16.17.1\n\nNVM (Node Version\
+      \ Manager) can be used as well to install different versions but it is function\
+      \ wide which means changes are visible to all function calls during the function\
+      \ / container lifetime. If the application is returning plain JSON on standard\
+      \ out it will be used as JSON result in Direktiv. If the application prints\
+      \ other strings to standard out the response will be a plain string. If JSON\
+      \ output is required the application can create and write to a file called output.json.\
+      \ If this file exists, this function uses its contents as return value.\nFunctions\
+      \ can have a context to persist the node_modules directory across different\
+      \ execution cycles. Unlike Direktiv's regular behaviour to have a new working\
+      \ directory for each execution, the context ensures that it runs in the same\
+      \ directory each time. "
+servers:
+- url: /
+paths:
+  /:
+    post:
+      parameters:
+      - name: Direktiv-ActionID
+        in: header
+        description: "direktiv action id is an UUID. \nFor development it can be set\
+          \ to 'development'\n"
+        schema:
+          type: string
+          default: development
+      - name: Direktiv-TempDir
+        in: header
+        description: |
+          direktiv temp dir is the working directory for that request
+          For development it can be set to e.g. '/tmp'
+        schema:
+          type: string
+          default: /tmp
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                context:
+                  type: string
+                  description: "Direktiv will delete the working directory after each\
+                    \ execution. With the context the application can run in a different\n\
+                    directory and commands like npm install will be persistent. If\
+                    \ context is not set the \"node_module\" directory will be deleted\n\
+                    and each execution of the flow uses an empty modules folder. Multiple\
+                    \ apps can not share a context. \n"
+                node:
+                  type: string
+                  description: Default node version for the script
+                  default: 18.10.0
+                files:
+                  type: array
+                  description: File to create before running commands.
+                  items:
+                    $ref: '#/components/schemas/direktivFile'
+                commands:
+                  type: array
+                  description: Array of commands.
+                  items:
+                    type: object
+                    properties:
+                      command:
+                        type: string
+                        description: Command to run
+                      silent:
+                        type: boolean
+                        description: If set to false the command will not print output
+                          to logs.
+                        default: false
+                      print:
+                        type: boolean
+                        description: If set to false the command will not print the
+                          full command with arguments to logs.
+                        default: true
+                      continue:
+                        type: boolean
+                        description: "Stops excecution if command fails, otherwise\
+                          \ proceeds with next command"
+                      envs:
+                        type: array
+                        description: Environment variables set for each command.
+                        example:
+                        - name: MYVALUE
+                          value: hello
+                        items:
+                          type: object
+                          properties:
+                            name:
+                              type: string
+                              description: Name of the variable.
+                            value:
+                              type: string
+                              description: Value of the variable.
+        required: false
+      responses:
+        "200":
+          description: List of executed commands.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  node:
+                    type: array
+                    items:
+                      required:
+                      - result
+                      - success
+                      type: object
+                      properties:
+                        success:
+                          type: boolean
+                        result:
+                          type: object
+            node:
+              example:
+              - result: Hello World
+                success: true
+        default:
+          description: generic error response
+          headers:
+            Direktiv-ErrorMessage:
+              schema:
+                type: string
+            Direktiv-ErrorCode:
+              schema:
+                type: string
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/error'
+      x-direktiv-function: |-
+        functions:
+        - id: node
+          image: gcr.io/direktiv/functions/node:1.0
+          type: knative-workflow
+      x-direktiv-examples:
+      - title: Basic
+        content: "- id: node \n  type: action\n  action:\n    function: node\n   \
+          \ input:\n      files:\n      - name: hello.js\n        data: |\n      \
+          \    console.log(\"Hello World\"); \n      commands:\n      - command: node\
+          \ hello.js"
+      - title: Change node version
+        content: "- id: node \n  type: action\n  action:\n    function: node\n   \
+          \ input:\n      node: \"16\"\n      commands:\n      - command: node -v"
+      - title: Using a context
+        content: "- id: node \n  type: action\n  action:\n    function: node\n   \
+          \ input: \n      context: uuid-app\n      files: \n      - name: myapp.js\n\
+          \        data: |\n          const { v4: uuidv4 } = require('uuid');\n  \
+          \        console.log(uuidv4());\n      commands:\n      - command: npm install\
+          \ uuid\n      - command: node myapp.js   "
+      - title: Using Direktiv variable as script
+        content: "- id: node \n  type: action\n  action:\n    function: node\n   \
+          \ files:\n    - key: out.js\n      scope: workflow\n    input:\n      commands:\n\
+          \      - command: node out.js      "
+      x-direktiv:
+        cmds:
+        - action: exec
+          exec: "{{ if .Context }} mkdir -p /context/{{ .Context }} {{ else }} echo\
+            \ -n \"\" {{ end }}"
+          silent: true
+          print: false
+        - action: exec
+          exec: "{{ if .Context }} cp -Rf . /context/{{ .Context }} {{ else }} echo\
+            \ -n \"\" {{ end }}"
+          silent: true
+          print: false
+        - action: foreach
+          loop: .Commands
+          exec: "bash -c 'source /usr/local/nvm/nvm.sh && nvm use {{ if .Body.Node\
+            \ }} {{ .Body.Node }} {{ else }} 18.10.0 {{ end }} > /dev/null && {{ .Item.Command\
+            \ }}'"
+          silent: "{{ .Item.Silent }}"
+          print: "{{ .Item.Print }}"
+          continue: "{{ .Item.Continue }}"
+          output: output.json
+          workingdir: "{{ if .Body.Context }}/context/{{ .Body.Context }}{{ else }}{{\
+            \ end }}"
+          runtime-envs: |
+            [
+            {{- range $index, $element := .Item.Envs }}
+            {{- if $index}},{{- end}}
+            "{{ $element.Name }}={{ $element.Value }}"
+            {{- end }}
+            ]
+        output: |
+          {
+            "node": {{ index . 2 | toJson }}
+          }
+      x-direktiv-errors:
+        io.direktiv.command.error: Command execution failed
+        io.direktiv.output.error: Template error for output generation of the service
+        io.direktiv.ri.error: Can not create information object from request
+      x-codegen-request-body-name: body
+components:
+  schemas:
+    direktivFile:
+      type: object
+      x-go-type:
+        type: DirektivFile
+        import:
+          package: github.com/direktiv/apps/go/pkg/apps
+    error:
+      required:
+      - errorCode
+      - errorMessage
+      type: object
+      properties:
+        errorCode:
+          type: string
+        errorMessage:
+          type: string
+
